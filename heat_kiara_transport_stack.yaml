@@ -1,0 +1,114 @@
+heat_template_version: 2013-05-23
+
+description: Simple template to deploy a single instance with the KIARA-Transport-Stack
+
+parameters:
+  Flavor: 
+    default: m1.medium
+    description: "Type of instance (flavor) to be used"
+    label: "Instance Type"
+    type: string
+    constraints:
+      - allowed_values: [m1.small, m1.medium, m1.large ]
+        description: Allowed values are m1.small, m1.medium and m1.large
+  Security Group:
+    default: kiara
+    description: Security Group used by instances
+    type: string
+    label: "Security Group"
+  Key Name KIARA-Broker: 
+    description: "Name of key-pair to be used for the KIARA Broker"
+    label: "Key Name"
+    type: string
+  Image:
+    description: "Name of image to use"
+    default: kiara_base
+    type: string
+  Public Net ID:
+    type: string
+    description: >
+      ID of public network for which floating IP addresses will be allocated (default net04_ext) 
+    default: e4369fb5-6bf1-477e-bdeb-f982cc695c94
+  Private Net ID:
+    type: string
+    description: ID of private network into which servers get deployed (default kiara_network)
+    default: 1f96d1a3-ab35-4369-8cf2-2d3c44c1f76c
+  Private Subnet ID:
+    type: string
+    description: ID of private sub network into which servers get deployed (default kiara_network_subnet)
+    default: cdbf3222-a886-4778-a2df-c70e6e06591f
+
+resources:
+  vm_kiara_broker:
+    type: OS::Nova::Server
+    properties:
+      name: "KIARA Transport Stack"
+      key_name: { get_param: "Key Name KIARA-Broker" }
+      image: { get_param: Image }
+      flavor: { get_param: Flavor }
+      networks:
+        - port: { get_resource: vm_kiara_broker_port }
+      security_groups: [ get_param: "Security Group" ]
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash
+            export GIT_SSL_NO_VERIFY=1
+            cd /root
+            git clone https://github.com/zeromq/zeromq4-x.git
+            cd zeromq4-x/
+            ./autogen.sh
+            ./configure
+            sudo make
+            sudo make install
+            cd ..
+            git clone git://github.com/jedisct1/libsodium.git
+            cd libsodium
+            ./autogen.sh
+            ./configure
+            sudo make install
+            sudo ldconfig
+            cd ..
+            git clone git://github.com/zeromq/libzmq.git
+            cd libzmq
+            ./autogen.sh
+            ./configure
+            sudo make install
+            sudo ldconfig
+            cd ..
+            git clone git://github.com/zeromq/czmq.git
+            cd czmq
+            ./autogen.sh
+            ./configure
+            sudo make install
+            sudo ldconfig
+            cd ..
+            git clone https://dornbirn.zhaw.ch/gitbucket/git/kiara/transport.git
+            cd transport
+            git checkout 0.3.0-alpha
+            sed -i 's/5555/5556/g' src/examples/main_server_0mq_http.cpp
+            make clean && make server_0mq_http_pp ASAN=0
+            cd ..
+            cd /root
+            touch inst-kiara-transport-zmq-transport-stack-finished
+
+  vm_kiara_broker_port:
+    type: OS::Neutron::Port
+    properties:
+      network_id: { get_param: "Private Net ID" }
+      fixed_ips:
+        - subnet_id: { get_param: "Private Subnet ID" }
+
+  vm_kiara_broker_floating_ip:
+    type: OS::Neutron::FloatingIP
+    properties:
+      floating_network_id: { get_param: "Public Net ID" }
+      port_id: { get_resource: vm_kiara_broker_port }
+
+outputs:
+  KIARA Broker Private IP:
+    description: Private IP address of the KIARA Broker
+    value: { get_attr: [ vm_kiara_broker, first_address ] }
+  KIARA Broker Public IP:
+    description: Public IP address of the KIARA Broker
+    value: { get_attr: [ vm_kiara_broker_floating_ip, floating_ip_address ] }
