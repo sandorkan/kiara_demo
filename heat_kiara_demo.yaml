@@ -64,20 +64,6 @@ resources:
             sudo make
             sudo make install
             cd ..
-            git clone git://github.com/jedisct1/libsodium.git
-            cd libsodium
-            ./autogen.sh
-            ./configure
-            sudo make install
-            sudo ldconfig
-            cd ..
-            git clone git://github.com/zeromq/libzmq.git
-            cd libzmq
-            ./autogen.sh
-            ./configure
-            sudo make install
-            sudo ldconfig
-            cd ..
             git clone git://github.com/zeromq/czmq.git
             cd czmq
             ./autogen.sh
